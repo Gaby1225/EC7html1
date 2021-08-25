@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+    <head>
+        <meta charset="UTF-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Gráfico de ações</title>
+        <link href="./css/styles.css" rel="stylesheet">
+        <link href="./bootstrap/dist/css/bootstrap.min.css" rel="stylesheet">
+        <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>	
+    </head>
+
+
+    <body>
+        <h1>Busca de ações</h1>
+        <form class="d-flex" action="" method="POST" id="myForm"></form>
+            <input id="txtAcoes" type="search" placeholder="OIBR3"> 
+            <button class="btn btn-success" type="button" onclick="validarAcoes()">Pesquisar</button>
+        </form>
+
+        <div id="error">
+            Erro inesperado = (
+        </div>
+
+        <div class="col-md-12">
+    		<div id="chart-line" class="line-chart"></div>
+    	</div>
+    </body>
+</html>
+
+
+<script>
+        /*+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+    	Validação do formulário de pesquisa de ações
+    +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*/	
+
+    // Ticker da ação cujos dados quer consultar
+    var symbol = 'OIBR3';
+
+    function validarAcoes(){		
+    	var aux = document.getElementById('txtAcoes').value;
+    	symbol = aux;
+    
+    	if (aux === undefined || aux ==null || aux.length<5) {
+    		document.getElementById('error').style.display = 'block';
+    		document.getElementById('error').innerHTML = 'Código de ação inválido!';
+    		document.getElementById('txtAcoes').focus();		
+    	}
+    	else {
+    		document.getElementById('error').style.display = 'none';
+    		lineChartData = [ ['',0,0] ];
+    		symbol = aux;
+    		urlDaily = `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=${symbol}.sa&interval=5min&apikey=${apiKey}`;		
+    		// Solicitando os dados para a API
+    		requestData(urlDaily);				
+    	}	
+    }
+
+
+    /*+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+    	Programação do uso da API AlphaVantage
+    +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*/	
+
+    // Sua chave para acesso à API
+    var apiKey = 'GYA5UI2KDPZOVB1N';
+
+    // URL para solicitar dados de cotação diária de uma ação
+    var urlDaily = 
+    	`https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=${symbol}.sa&interval=5min&apikey=${apiKey}`;
+
+    // Variáveis globais para receber os dados utilizados pelos gráficos
+    var barChartData;
+    var lineChartData = [ [,,] ];
+
+    // Função para requisitar os ddos da API
+    async function requestData( url ) { 
+
+    	const options = {
+    		method: 'GET',
+    		mode: 'cors',
+    		cache: 'default'
+    	};
+    
+    	await fetch( url, options )
+    		.then( response => { response.json() 
+    			.then ( data => showData(data) )
+    		})
+    		.catch ( e => showError(e.message) )
+    } 
+
+    // Função para informar possíveis erros
+    function showError(msg) {	
+    	document.getElementById('error').style.display = 'block';
+    	document.getElementById('error').innerHTML = 'Erro: ' + msg;
+    	document.getElementById('txtAcoes').focus();		
+    }
+
+    //	Função para exibição dos dados 
+    function showData(data) {
+    
+    	let aux = data['Time Series (Daily)'];
+    	let rowsCount = 0;		
+    	let maxima = 0;
+    	let minima = 99999999;
+    	let media = 0;
+    
+    	//document.getElementById('series-table').tBodies[0].innerHTML = '';
+    
+    	for ( const field in aux ) {	
+    		let auxDate = new Date(field);
+    		let day = ( (auxDate.getDate()+1) <10) ? ('0'+ (auxDate.getDate()+1) ) : (auxDate.getDate() + 1);
+    		let month = ( (auxDate.getMonth()+1) <10) ? ('0'+ (auxDate.getMonth()+1) ) : (auxDate.getMonth()+1);
+    		let year = auxDate.getFullYear();		
+    		let formatDate =  day + '/' + month + '/' + year;	
+        
+    		let openValue = parseFloat(aux[field]['1. open']).toFixed(2);
+    		let closeValue = parseFloat(aux[field]['4. close']).toFixed(2);		
+        
+    		/* Adicionando os últimos 4 registros na tabela da página index
+    		if ( rowsCount < 5 ) {
+    			addTableContent(formatDate, openValue, closeValue);			
+    		}*/	
+        
+    		if (maxima < parseFloat(aux[field]['4. close'])) {
+    			maxima = parseFloat(aux[field]['4. close']);
+    		}
+        
+    		if (minima > parseFloat(aux[field]['4. close'])) {
+    			minima = parseFloat(aux[field]['4. close']);			
+    		}
+        
+    		media += parseFloat(aux[field]['4. close']);		
+        
+    		lineChartData[rowsCount] = [formatDate, 
+    			parseFloat(aux[field]['1. open']), 
+    			parseFloat(aux[field]['4. close'])
+    		];
+        
+    		//lineChartData.push(auxValues );
+    		rowsCount++;
+    	} // for	
+    
+    	media = media / rowsCount;
+    
+    	if (minima == 99999999) { minima = 0; }
+    
+    	// Informando valores para o gráfico de linhas		
+    	google.charts.load('current', {packages: ['corechart', 'line']});		
+    	google.charts.setOnLoadCallback(drawCurveTypes);	
+    }
+
+
+
+    // Gráfico de linha para série diária de valores
+    function drawCurveTypes() {
+        var data = new google.visualization.DataTable();
+        data.addColumn('string', 'Data');
+        data.addColumn('number', 'Abertura');
+        data.addColumn('number', 'Fechamento');
+
+        data.addRows(lineChartData.reverse());
+
+        var options = {
+    		title: 'Diária de preço',  
+            hAxis: {
+              title: 'Data'
+            },
+            vAxis: {
+              title: 'Valores R$'
+            },
+            series: {
+              1: {curveType: 'function'}
+            }
+        };
+
+        var chart = new google.visualization.LineChart(document.getElementById('chart-line'));
+        chart.draw(data, options);
+    }
+	
+
+</script>
